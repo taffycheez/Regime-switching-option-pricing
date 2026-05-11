@@ -25,7 +25,7 @@ warnings.filterwarnings("ignore")
 #   (c) Prevent negative prices in GBM simulation (since exp is always > 0).
 
 
-def fetch_sp500(start="2000-01-01", end="202-01-01") -> pd.Series:
+def fetch_sp500(start="2000-01-01", end="2026-01-01") -> pd.Series:
     """
     Download S&P500 daily log-returns from Yahoo Finance
     
@@ -47,7 +47,7 @@ def fetch_sp500(start="2000-01-01", end="202-01-01") -> pd.Series:
     # squeeze() converts a single-column DataFrame so a Series.
     
     print("Downloading S&P 500 data...")
-    raw     = yf.download("^GSPC", start=start, end=end, progress=T)
+    raw     = yf.download("^GSPC", start=start, end=end, progress=True)
     closes  = raw["Close"].squeeze().dropna()
     print("Download complete. Processing returns...")
     
@@ -168,14 +168,17 @@ def fit_hmm(features, n_regimes=N_REGIMES, n_iter=100) -> DenseHMM:
     # Initialise one Normal distribution per regime (pomegranate will fit mu/sigma)
     distributions = [Normal() for _ in range(n_regimes)]
     
-    model = Dense(distributions=distributions, max_iter=n_iter, verbose=False)
+    model = DenseHMM(distributions=distributions, max_iter=n_iter, verbose=False)
     
     # pomegranate expects input shape (n_sequences, T, D)
     # We have one long sequence, so unsqueexe adds the leading dimension (1, T, 3)
-    X_tensor = torch.tensor(features, dtype=torch.float32).unqueeze(0)
+    X_tensor = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
+    # Set seeds for reproducibility
+    torch.manual_seed(42)
+    np.random.seed(42)
     print("Running Baum-Welch EM...")
     model.fit(X_tensor)
-    
+        
     print("HMM fitted via pomegranate Baum-Welch")
     return model
 
@@ -244,7 +247,7 @@ def extract_regime_params(model, log_ret, features):
     # Reindex transition matrix
     # model.dense_transition_matrix() returns a (K+2, K+2) tensor that includes
     # start and end state rows/cols; we slice out only the K×K interior.    
-    P_raw = model.dense_transition_matrix().numpy()[:K, :K]    
+    P_raw = torch.exp(model.edges).numpy()[:K, :K]    
     P     = np.zeros_like(P_raw)
     for old_i, new_i in relabel.items():
         for old_j, new_j in relabel.items():
