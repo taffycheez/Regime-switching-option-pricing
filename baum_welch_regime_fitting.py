@@ -1,5 +1,5 @@
 """
-Baum-Welch Implementation on S&P500, Classifying into 5 Reigmes 
+Baum-Welch Implementation with Viterbi decoding on S&P500
 """
 
 import numpy as np
@@ -133,10 +133,15 @@ def build_features(log_ret, window=21) -> np.ndarray:
 #   - We use this path so assign each historical day to a regime,
 #     then compute mu and sigma per regime from raw returns
 
+N_REGIMES = 2
 
 
-REGIME_LABELS = ["extreme_bear", "bear", "nuetral", "bull", "extreme_bull"]
-N_REGIMES = 5
+if N_REGIMES == 2:
+    REGIME_LABELS = ["bear", "bull"]
+elif N_REGIMES == 3:
+    REGIME_LABELS = ["bear", "neutral", "bull"]
+elif N_REGIMES == 5:
+    REGIME_LABELS = ["extreme_bear", "bear", "neutral", "bull", "extreme_bull"]
 
 
 def fit_hmm(features, n_regimes=N_REGIMES, n_iter=100) -> DenseHMM:
@@ -163,7 +168,6 @@ def fit_hmm(features, n_regimes=N_REGIMES, n_iter=100) -> DenseHMM:
     DenseHMM
         Fitted pomegranate HMM with learned transition matrix and emissions
     """
-    
     print(f"Initialising {n_regimes}-state HMM...")
     # Initialise one Normal distribution per regime (pomegranate will fit mu/sigma)
     distributions = [Normal() for _ in range(n_regimes)]
@@ -173,9 +177,7 @@ def fit_hmm(features, n_regimes=N_REGIMES, n_iter=100) -> DenseHMM:
     # pomegranate expects input shape (n_sequences, T, D)
     # We have one long sequence, so unsqueexe adds the leading dimension (1, T, 3)
     X_tensor = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
-    # Set seeds for reproducibility
-    torch.manual_seed(42)
-    np.random.seed(42)
+
     print("Running Baum-Welch EM...")
     model.fit(X_tensor)
         
